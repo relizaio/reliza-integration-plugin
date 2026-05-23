@@ -1,5 +1,21 @@
 ## Changelog
 
+### Version 0.4.0 (May 23, 2026)
+
+-   Add ReARM support alongside Reliza Hub. New pipeline steps:
+    -   `withRearm` — mints a release version against a ReARM instance and
+        exports `VERSION` / `DOCKER_VERSION` / `LATEST_COMMIT` for downstream
+        steps. Component resolution accepts either `componentId` or
+        `vcsUri` + `repoPath` (org-WRITE FREEFORM key). `createComponentIfMissing`
+        auto-provisions the component on first call.
+    -   `addRearmRelease` — records the release on ReARM with artifact
+        metadata. Pairs naturally with `withRearm`; default `onlyVersion=true`
+        on `withRearm` reserves the version without creating the release so
+        `addRearmRelease` does the actual create with full metadata.
+-   Bump Reliza Java Client dependency to 0.5.0 (adds the `rearm.java.client`
+    sibling package; Reliza Hub paths unchanged).
+-   `withReliza` / `addRelizaRelease` are unchanged.
+
 ### Version 0.3.5 (February 15, 2025)
 
 -   Security updates of dependencies

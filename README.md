@@ -1,8 +1,12 @@
-# Reliza integration with Jenkins
+# Reliza / ReARM integration with Jenkins
 
 ## Plugin use
 
-This plugin integrates itself with [Reliza Hub](https://app.relizahub.com), allowing you to automatically set new releases through your Jenkinsfile. 
+This plugin integrates with both [Reliza Hub](https://app.relizahub.com)
+(`withReliza` / `addRelizaRelease`) and [ReARM](https://rearmhq.com)
+(`withRearm` / `addRearmRelease`). The two are independent — pick the pair
+that matches the backend you're targeting; they can also coexist in the same
+Jenkinsfile when you're double-publishing during a migration.
 
 More information on how to use Reliza Hub:
 https://www.youtube.com/watch?v=yDlf5fMBGuI
@@ -128,6 +132,124 @@ spec:
                             echo 'FAILED BUILD: ' + e.toString()
                         }
                         addRelizaRelease(artId: "relizatest/throw", artType: "Docker")
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## ReARM steps
+
+The ReARM-flavoured steps mirror the Reliza Hub ones but speak the ReARM
+GraphQL programmatic API (`getNewVersionProgrammatic`,
+`addReleaseProgrammatic`, `getLatestReleaseProgrammatic`).
+
+### Credentials
+
+Mint a ReARM FREEFORM API key with at least `RESOURCE` + `LIFECYCLE_UPDATE`
+permissions (ORGANIZATION scope, READ_WRITE) and store it as a Jenkins
+"Username with password" credential under id `REARM_API` — the structured
+`FREEFORM__<orgUuid>__ord__<keyOrder>` id goes in the username field and
+the plaintext secret goes in the password field.
+
+### `withRearm`
+
+Negotiates a new version with ReARM and exports the result as environment
+variables. Defaults to `onlyVersion=true`: the version is reserved but the
+release row is not created yet, so a subsequent `addRearmRelease` can do
+that with full build metadata (commit, SHA-256, etc.).
+
+Parameters:
+
+* `uri` — ReARM base URL (default `https://app.rearmhq.com`).
+* `componentId` — UUID of the component, when the API key is component-scoped
+  or you already know the UUID.
+* `vcsUri` + `repoPath` — alternative to `componentId`; requires an
+  organization-WRITE FREEFORM key. ReARM resolves the component from the
+  `(vcsUri, repoPath)` pair, the same way `rearm-cli` does.
+* `vcsDisplayName` — optional display name for the VCS repository row if
+  ReARM has to create it.
+* `createComponentIfMissing: 'true'` — auto-create the component when the
+  `(vcsUri, repoPath)` lookup misses. Combine with `createComponentName`,
+  `createComponentVersionSchema`, and
+  `createComponentFeatureBranchVersionSchema` (feature-branch versioning is
+  required by ReARM on component create — `Branch.Micro` is a safe default).
+* `jenkinsVersionMeta: 'true'` — append the Jenkins build number as version
+  metadata.
+* `customVersionMeta` / `customVersionModifier` — explicit version
+  metadata / modifier; `customVersionMeta` overrides `jenkinsVersionMeta`.
+* `onlyVersion: 'false'` — opt out of the default; lets `withRearm` itself
+  create the release in one shot (skip `addRearmRelease` after).
+* `getVersion: 'false'` — skip the version negotiation entirely and only
+  populate `LATEST_COMMIT`.
+* `envSuffix` — suffix appended to every env var the step sets/reads, so
+  multiple `withRearm` calls in the same pipeline don't stomp on each other.
+
+Environment variables set:
+
+* `VERSION` — the minted version.
+* `DOCKER_VERSION` — `:` and `+` replaced for safe Docker tagging.
+* `RELEASE_LIFECYCLE` — lifecycle as reported by ReARM (only when
+  `onlyVersion=false`).
+* `LATEST_COMMIT` — commit hash of the latest existing release (from
+  `getLatestReleaseProgrammatic`).
+* `URI`, `COMPONENT_ID`, `VCS_URI`, `REPO_PATH`, `BUILD_START_TIME` —
+  context for downstream `addRearmRelease`.
+
+### `addRearmRelease`
+
+Creates the release on ReARM with metadata pulled from the wrapper's env vars
+plus whatever is set on the step.
+
+Parameters:
+
+* `status` — overrides the `STATUS` env var.
+* `artId`, `artType` — when both set together with `SHA_256` env var, the
+  release will carry an artifact entry with the given digest, CI metadata,
+  and build URL.
+* `version` — overrides `env.VERSION` (useful when not using `withRearm`).
+* `uri`, `componentId`, `vcsUri`, `repoPath` — override env-supplied
+  context.
+* `useCommitList: 'true'` — read the base64-encoded commit list from
+  `COMMIT_LIST` instead of `GIT_COMMIT` + `COMMIT_MESSAGE` + `COMMIT_TIME`.
+* `envSuffix` — same semantics as on `withRearm`.
+
+### Example Jenkinsfile (ReARM)
+
+```groovy
+pipeline {
+    agent any
+    environment { REARM_API = credentials('REARM_API') }
+    stages {
+        stage('Capture commit metadata') {
+            steps {
+                script {
+                    env.COMMIT_TIME    = sh(returnStdout: true,
+                        script: "git log -1 --date=iso-strict --pretty='%ad'").trim()
+                    env.COMMIT_MESSAGE = sh(returnStdout: true,
+                        script: "git log -1 --pretty=%s").trim()
+                }
+            }
+        }
+        stage('Build + register release') {
+            steps {
+                withRearm(
+                    uri:                                       'https://app.rearmhq.com',
+                    vcsUri:                                    'https://github.com/acme/widget',
+                    repoPath:                                  'service',
+                    createComponentIfMissing:                  'true',
+                    createComponentName:                       'acme widget service',
+                    createComponentVersionSchema:              'semver',
+                    createComponentFeatureBranchVersionSchema: 'Branch.Micro'
+                ) {
+                    script {
+                        // ... build the artifact, then:
+                        env.SHA_256 = sh(returnStdout: true,
+                            script: "docker inspect -f '{{(index .RepoDigests 0)}}' acme/widget:latest | cut -f2 -d@").trim()
+                        env.STATUS  = 'complete'
+                        addRearmRelease(artId: 'acme/widget', artType: 'Docker')
                     }
                 }
             }

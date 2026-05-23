@@ -45,12 +45,15 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 	private Boolean jenkinsVersionMeta = false;
 	private String customVersionMeta;
 	private String customVersionModifier;
-	// Default to true: `withRearm` is meant to *mint* the version so a later
-	// `addRearmRelease` can create the release with full metadata (commit,
-	// SHA-256, etc.). When false, `getNewVersionProgrammatic` itself creates
-	// the release and any subsequent `addRearmRelease` for the same version
-	// will fail the (component, version) dedup gate.
-	private Boolean onlyVersion = true;
+	private Boolean onlyVersion = false;
+	// Default lifecycle for the release created at version-mint time. PENDING
+	// is the canonical "build started" state — same convention `rearm-actions`
+	// uses in GHA. `addRearmRelease` later upgrades it to ASSEMBLED with the
+	// full metadata, taking advantage of ReARM's PENDING→update path on
+	// `addReleaseProgrammatic` (non-PENDING existing releases would dedup-fail).
+	// Override by passing `lifecycle: '<state>'`; pair with `onlyVersion: 'true'`
+	// to suppress release creation entirely.
+	private String lifecycle = "PENDING";
 	private Boolean getVersion = true;
 	private String envSuffix = "";
 
@@ -78,11 +81,10 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 	@DataBoundSetter public void setCustomVersionMeta(String value) { this.customVersionMeta = value; }
 	@DataBoundSetter public void setCustomVersionModifier(String value) { this.customVersionModifier = value; }
 	@DataBoundSetter public void setOnlyVersion(String value) {
-		// Tri-valued: explicit "false" turns it off; anything else falls through
-		// to the (true) default. Letting the caller opt back into the one-shot
-		// "mint + create release in one call" mode if they don't plan to follow
-		// up with `addRearmRelease`.
-		this.onlyVersion = !"false".equalsIgnoreCase(value);
+		this.onlyVersion = "true".equalsIgnoreCase(value);
+	}
+	@DataBoundSetter public void setLifecycle(String lifecycle) {
+		this.lifecycle = lifecycle;
 	}
 	@DataBoundSetter public void setGetVersion(String value) {
 		this.getVersion = !"false".equalsIgnoreCase(value);
@@ -105,9 +107,11 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 				.apiKey(initialEnvironment.get("REARM_API_PSW"))
 				.componentId(RearmHelpers.toUUID(componentId, listener))
 				.branch(RearmHelpers.resolveEnvVar("GIT_BRANCH", envSuffix, initialEnvironment))
+				.commitHash(RearmHelpers.resolveEnvVar("GIT_COMMIT", envSuffix, initialEnvironment))
 				.commitMessage(RearmHelpers.resolveEnvVar("COMMIT_MESSAGE", envSuffix, initialEnvironment))
 				.commitList(RearmHelpers.resolveEnvVar("COMMIT_LIST", envSuffix, initialEnvironment))
 				.modifier(customVersionModifier)
+				.lifecycle(lifecycle)
 				.onlyVersion(onlyVersion);
 
 		if (uri != null) flagsBuilder.baseUrl(uri);

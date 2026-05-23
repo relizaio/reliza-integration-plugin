@@ -156,10 +156,13 @@ the plaintext secret goes in the password field.
 
 ### `withRearm`
 
-Negotiates a new version with ReARM and exports the result as environment
-variables. Defaults to `onlyVersion=true`: the version is reserved but the
-release row is not created yet, so a subsequent `addRearmRelease` can do
-that with full build metadata (commit, SHA-256, etc.).
+Negotiates a new version with ReARM and creates the release in `PENDING`
+lifecycle (matching the `rearm-actions/initialize` GHA convention). Exports
+the result as environment variables. The follow-up `addRearmRelease` updates
+the same release in place — ReARM's `addReleaseProgrammatic` finishes a
+PENDING release rather than rejecting on the `(component, version)` dedup
+gate. Net effect: one row in ReARM, visible at PENDING immediately on
+build start and bumped to ASSEMBLED at finish.
 
 Parameters:
 
@@ -180,8 +183,12 @@ Parameters:
   metadata.
 * `customVersionMeta` / `customVersionModifier` — explicit version
   metadata / modifier; `customVersionMeta` overrides `jenkinsVersionMeta`.
-* `onlyVersion: 'false'` — opt out of the default; lets `withRearm` itself
-  create the release in one shot (skip `addRearmRelease` after).
+* `lifecycle` — override the default `PENDING` lifecycle at version-mint
+  time. Set to `ASSEMBLED` for a one-shot "mint + finish in one call" mode
+  if you don't plan to follow up with `addRearmRelease`.
+* `onlyVersion: 'true'` — opt out of release creation entirely; only the
+  version assignment is reserved. Useful when you intentionally want to
+  defer release creation to `addRearmRelease` (or skip it altogether).
 * `getVersion: 'false'` — skip the version negotiation entirely and only
   populate `LATEST_COMMIT`.
 * `envSuffix` — suffix appended to every env var the step sets/reads, so
@@ -205,7 +212,11 @@ plus whatever is set on the step.
 
 Parameters:
 
-* `status` — overrides the `STATUS` env var.
+* `lifecycle` — explicit lifecycle to land on (default `ASSEMBLED`). Set to
+  `REJECTED` for a failed build. The `STATUS` env var (`rejected` /
+  `REJECTED`) is honoured for convenience when `lifecycle` isn't set.
+* `status` — passed through to the release row for downstream tooling that
+  reads it; doesn't drive the lifecycle decision.
 * `artId`, `artType` — when both set together with `SHA_256` env var, the
   release will carry an artifact entry with the given digest, CI metadata,
   and build URL.
@@ -245,10 +256,10 @@ pipeline {
                     createComponentFeatureBranchVersionSchema: 'Branch.Micro'
                 ) {
                     script {
-                        // ... build the artifact, then:
+                        // withRearm already created the release in PENDING.
+                        // Build the artefact, capture the digest, then finish:
                         env.SHA_256 = sh(returnStdout: true,
                             script: "docker inspect -f '{{(index .RepoDigests 0)}}' acme/widget:latest | cut -f2 -d@").trim()
-                        env.STATUS  = 'complete'
                         addRearmRelease(artId: 'acme/widget', artType: 'Docker')
                     }
                 }

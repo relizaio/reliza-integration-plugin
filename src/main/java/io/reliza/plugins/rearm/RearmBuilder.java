@@ -29,6 +29,7 @@ import rearm.java.client.responses.RearmRelease;
  */
 public class RearmBuilder extends Builder implements SimpleBuildStep {
 	String status;
+	String lifecycle;
 	String artId;
 	String artType;
 	String version;
@@ -43,6 +44,7 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	public RearmBuilder() {}
 
 	@DataBoundSetter public void setStatus(String status) { this.status = status; }
+	@DataBoundSetter public void setLifecycle(String lifecycle) { this.lifecycle = lifecycle; }
 	@DataBoundSetter public void setArtId(String artId) { this.artId = artId; }
 	@DataBoundSetter public void setArtType(String artType) { this.artType = artType; }
 	@DataBoundSetter public void setVersion(String version) { this.version = version; }
@@ -115,6 +117,22 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 		if (uri != null) flagsBuilder.baseUrl(uri);
 		if (status != null) flagsBuilder.status(status);
 		if (version != null) flagsBuilder.version(version);
+
+		// Default the release lifecycle to ASSEMBLED so the typical flow
+		// (withRearm starts the release in PENDING → addRearmRelease finishes
+		// it) lands as expected. Explicit `lifecycle:` on the step wins;
+		// a `STATUS` env var of "rejected" / "REJECTED" also wins (matches
+		// the existing Reliza Hub-side convention of using STATUS).
+		String resolvedLifecycle = "ASSEMBLED";
+		if (lifecycle != null) {
+			resolvedLifecycle = lifecycle.toUpperCase();
+		} else {
+			String envStatus = RearmHelpers.resolveEnvVar("STATUS", envSuffix, envVars);
+			if (envStatus != null && envStatus.equalsIgnoreCase("rejected")) {
+				resolvedLifecycle = "REJECTED";
+			}
+		}
+		flagsBuilder.lifecycle(resolvedLifecycle);
 
 		RearmLibrary library = new RearmLibrary(flagsBuilder.build());
 		RearmRelease release = library.addRelease();

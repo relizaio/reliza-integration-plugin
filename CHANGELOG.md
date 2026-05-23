@@ -4,14 +4,21 @@
 
 -   Add ReARM support alongside Reliza Hub. New pipeline steps:
     -   `withRearm` — mints a release version against a ReARM instance and
-        exports `VERSION` / `DOCKER_VERSION` / `LATEST_COMMIT` for downstream
-        steps. Component resolution accepts either `componentId` or
-        `vcsUri` + `repoPath` (org-WRITE FREEFORM key). `createComponentIfMissing`
-        auto-provisions the component on first call.
-    -   `addRearmRelease` — records the release on ReARM with artifact
-        metadata. Pairs naturally with `withRearm`; default `onlyVersion=true`
-        on `withRearm` reserves the version without creating the release so
-        `addRearmRelease` does the actual create with full metadata.
+        creates the release in `PENDING` lifecycle (matching the
+        `rearm-actions/initialize` GHA convention). Exports `VERSION` /
+        `DOCKER_VERSION` / `LATEST_COMMIT` for downstream steps. Component
+        resolution accepts either `componentId` or `vcsUri` + `repoPath`
+        (org-WRITE FREEFORM key). `createComponentIfMissing` auto-provisions
+        the component on first call. Override the default with
+        `lifecycle: '<state>'`, or pass `onlyVersion: 'true'` to mint only
+        a version assignment without a release row.
+    -   `addRearmRelease` — attaches build metadata (commit, SHA-256, etc.)
+        and flips lifecycle to `ASSEMBLED` (default; override with
+        `lifecycle: '<state>'`, or set the `STATUS` env var to `rejected`
+        for a failed build). Uses ReARM's PENDING→update path on
+        `addReleaseProgrammatic`, so the row stays the same — operators
+        see the release in ReARM immediately at build start and don't
+        get a duplicate at finish.
 -   Bump Reliza Java Client dependency to 0.5.0 (adds the `rearm.java.client`
     sibling package; Reliza Hub paths unchanged).
 -   `withReliza` / `addRelizaRelease` are unchanged.

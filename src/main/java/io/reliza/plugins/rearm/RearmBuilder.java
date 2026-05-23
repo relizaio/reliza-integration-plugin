@@ -2,10 +2,15 @@ package io.reliza.plugins.rearm;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import hudson.EnvVars;
 import hudson.Extension;
@@ -41,6 +46,9 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	String deliverableType;
 	String deliverableDigest;
 	String deliverablePurl;
+	String sceArtsJson;
+	String releaseArtsJson;
+	String odelArtsJson;
 	Boolean useCommitList = false;
 	String envSuffix = "";
 
@@ -60,6 +68,9 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	@DataBoundSetter public void setDeliverableType(String v) { this.deliverableType = v; }
 	@DataBoundSetter public void setDeliverableDigest(String v) { this.deliverableDigest = v; }
 	@DataBoundSetter public void setDeliverablePurl(String v) { this.deliverablePurl = v; }
+	@DataBoundSetter public void setSceArtsJson(String v) { this.sceArtsJson = v; }
+	@DataBoundSetter public void setReleaseArtsJson(String v) { this.releaseArtsJson = v; }
+	@DataBoundSetter public void setOdelArtsJson(String v) { this.odelArtsJson = v; }
 	@DataBoundSetter public void setUseCommitList(String value) {
 		this.useCommitList = "true".equalsIgnoreCase(value);
 	}
@@ -120,6 +131,40 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 					.artCiMeta("Jenkins")
 					.artType(artType)
 					.artDigests(sha256);
+		}
+
+		// Free-form artifact lists (same shape as rearm-cli's --scearts /
+		// --releasearts / --odelartsjson JSON). Each artifact map can carry a
+		// `filePath` key pointing at a local file — the underlying library
+		// flips to the Apollo multipart-upload path automatically.
+		ObjectMapper om = new ObjectMapper();
+		TypeReference<List<Map<String, Object>>> listOfMap = new TypeReference<List<Map<String, Object>>>() {};
+		if (sceArtsJson != null && !sceArtsJson.isEmpty()) {
+			try {
+				for (Map<String, Object> a : om.readValue(sceArtsJson, listOfMap)) {
+					flagsBuilder.sceArtifact(a);
+				}
+			} catch (IOException e) {
+				throw new RuntimeException("Failed to parse sceArtsJson: " + e.getMessage(), e);
+			}
+		}
+		if (releaseArtsJson != null && !releaseArtsJson.isEmpty()) {
+			try {
+				for (Map<String, Object> a : om.readValue(releaseArtsJson, listOfMap)) {
+					flagsBuilder.releaseArtifact(a);
+				}
+			} catch (IOException e) {
+				throw new RuntimeException("Failed to parse releaseArtsJson: " + e.getMessage(), e);
+			}
+		}
+		if (odelArtsJson != null && !odelArtsJson.isEmpty()) {
+			try {
+				for (Map<String, Object> a : om.readValue(odelArtsJson, listOfMap)) {
+					flagsBuilder.deliverableArtifact(a);
+				}
+			} catch (IOException e) {
+				throw new RuntimeException("Failed to parse odelArtsJson: " + e.getMessage(), e);
+			}
 		}
 
 		// Outbound deliverable (one per release) — typical for the

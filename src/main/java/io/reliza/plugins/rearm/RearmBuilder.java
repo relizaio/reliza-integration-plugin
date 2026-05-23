@@ -49,6 +49,9 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	String sceArtsJson;
 	String releaseArtsJson;
 	String odelArtsJson;
+	List<Map<String, Object>> sceArts;
+	List<Map<String, Object>> releaseArts;
+	List<Map<String, Object>> odelArts;
 	Boolean useCommitList = false;
 	String envSuffix = "";
 
@@ -71,6 +74,12 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	@DataBoundSetter public void setSceArtsJson(String v) { this.sceArtsJson = v; }
 	@DataBoundSetter public void setReleaseArtsJson(String v) { this.releaseArtsJson = v; }
 	@DataBoundSetter public void setOdelArtsJson(String v) { this.odelArtsJson = v; }
+	// Native-Groovy variants: callers can pass `sceArts: [[...], [...]]`
+	// directly from Jenkinsfile without serialising through JsonOutput.toJson
+	// (which the script-security sandbox blocks by default).
+	@DataBoundSetter public void setSceArts(List<Map<String, Object>> v) { this.sceArts = v; }
+	@DataBoundSetter public void setReleaseArts(List<Map<String, Object>> v) { this.releaseArts = v; }
+	@DataBoundSetter public void setOdelArts(List<Map<String, Object>> v) { this.odelArts = v; }
 	@DataBoundSetter public void setUseCommitList(String value) {
 		this.useCommitList = "true".equalsIgnoreCase(value);
 	}
@@ -137,34 +146,17 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 		// --releasearts / --odelartsjson JSON). Each artifact map can carry a
 		// `filePath` key pointing at a local file — the underlying library
 		// flips to the Apollo multipart-upload path automatically.
+		// Native-Groovy lists win when both are set (no need to serialise).
 		ObjectMapper om = new ObjectMapper();
 		TypeReference<List<Map<String, Object>>> listOfMap = new TypeReference<List<Map<String, Object>>>() {};
-		if (sceArtsJson != null && !sceArtsJson.isEmpty()) {
-			try {
-				for (Map<String, Object> a : om.readValue(sceArtsJson, listOfMap)) {
-					flagsBuilder.sceArtifact(a);
-				}
-			} catch (IOException e) {
-				throw new RuntimeException("Failed to parse sceArtsJson: " + e.getMessage(), e);
-			}
+		for (Map<String, Object> a : resolveArtifactList(sceArts, sceArtsJson, "sceArts", om, listOfMap)) {
+			flagsBuilder.sceArtifact(a);
 		}
-		if (releaseArtsJson != null && !releaseArtsJson.isEmpty()) {
-			try {
-				for (Map<String, Object> a : om.readValue(releaseArtsJson, listOfMap)) {
-					flagsBuilder.releaseArtifact(a);
-				}
-			} catch (IOException e) {
-				throw new RuntimeException("Failed to parse releaseArtsJson: " + e.getMessage(), e);
-			}
+		for (Map<String, Object> a : resolveArtifactList(releaseArts, releaseArtsJson, "releaseArts", om, listOfMap)) {
+			flagsBuilder.releaseArtifact(a);
 		}
-		if (odelArtsJson != null && !odelArtsJson.isEmpty()) {
-			try {
-				for (Map<String, Object> a : om.readValue(odelArtsJson, listOfMap)) {
-					flagsBuilder.deliverableArtifact(a);
-				}
-			} catch (IOException e) {
-				throw new RuntimeException("Failed to parse odelArtsJson: " + e.getMessage(), e);
-			}
+		for (Map<String, Object> a : resolveArtifactList(odelArts, odelArtsJson, "odelArts", om, listOfMap)) {
+			flagsBuilder.deliverableArtifact(a);
 		}
 
 		// Outbound deliverable (one per release) — typical for the
@@ -208,6 +200,22 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 			throw new RuntimeException("ReARM did not return a release — check logs for GraphQL errors");
 		}
 		listener.getLogger().println("ReARM release uuid: " + release.getUuid() + ", version: " + release.getVersion());
+	}
+
+	private static List<Map<String, Object>> resolveArtifactList(List<Map<String, Object>> structured,
+			String jsonString, String paramName, ObjectMapper om,
+			TypeReference<List<Map<String, Object>>> tref) {
+		if (structured != null) {
+			return structured;
+		}
+		if (jsonString == null || jsonString.isEmpty()) {
+			return java.util.Collections.emptyList();
+		}
+		try {
+			return om.readValue(jsonString, tref);
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to parse " + paramName + "Json: " + e.getMessage(), e);
+		}
 	}
 
 	@Symbol("addRearmRelease")

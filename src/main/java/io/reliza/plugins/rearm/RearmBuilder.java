@@ -104,6 +104,8 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 		if (!readCommitList) {
 			flagsBuilder.commitHash(RearmHelpers.resolveEnvVar("GIT_COMMIT", envSuffix, envVars))
 					.commitMessage(RearmHelpers.resolveEnvVar("COMMIT_MESSAGE", envSuffix, envVars))
+					.commitAuthor(RearmHelpers.resolveEnvVar("COMMIT_AUTHOR", envSuffix, envVars))
+					.commitEmail(RearmHelpers.resolveEnvVar("COMMIT_EMAIL", envSuffix, envVars))
 					.dateActual(RearmHelpers.resolveEnvVar("COMMIT_TIME", envSuffix, envVars));
 		}
 

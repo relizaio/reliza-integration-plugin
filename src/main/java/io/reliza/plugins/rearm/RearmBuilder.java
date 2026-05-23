@@ -37,6 +37,10 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	String componentId;
 	String vcsUri;
 	String repoPath;
+	String deliverableId;
+	String deliverableType;
+	String deliverableDigest;
+	String deliverablePurl;
 	Boolean useCommitList = false;
 	String envSuffix = "";
 
@@ -52,6 +56,10 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 	@DataBoundSetter public void setUri(String uri) { this.uri = uri; }
 	@DataBoundSetter public void setVcsUri(String vcsUri) { this.vcsUri = vcsUri; }
 	@DataBoundSetter public void setRepoPath(String repoPath) { this.repoPath = repoPath; }
+	@DataBoundSetter public void setDeliverableId(String v) { this.deliverableId = v; }
+	@DataBoundSetter public void setDeliverableType(String v) { this.deliverableType = v; }
+	@DataBoundSetter public void setDeliverableDigest(String v) { this.deliverableDigest = v; }
+	@DataBoundSetter public void setDeliverablePurl(String v) { this.deliverablePurl = v; }
 	@DataBoundSetter public void setUseCommitList(String value) {
 		this.useCommitList = "true".equalsIgnoreCase(value);
 	}
@@ -110,6 +118,19 @@ public class RearmBuilder extends Builder implements SimpleBuildStep {
 					.artCiMeta("Jenkins")
 					.artType(artType)
 					.artDigests(sha256);
+		}
+
+		// Outbound deliverable (one per release) — typical for the
+		// CI flow that ships a Docker image / file artifact alongside
+		// the release. Mirrors rearm-cli's --odel* flags.
+		if (deliverableId != null) {
+			flagsBuilder.deliverableId(deliverableId);
+			if (deliverableType != null) flagsBuilder.deliverableType(deliverableType);
+			if (deliverableDigest != null) flagsBuilder.deliverableDigest(deliverableDigest);
+			if (deliverablePurl != null) flagsBuilder.deliverablePurl(deliverablePurl);
+			flagsBuilder.deliverableBuildId(RearmHelpers.resolveEnvVar("BUILD_NUMBER", envSuffix, envVars));
+			flagsBuilder.deliverableBuildUri(RearmHelpers.resolveEnvVar("RUN_DISPLAY_URL", envSuffix, envVars));
+			flagsBuilder.deliverableCiMeta("Jenkins");
 		}
 
 		String envUri = RearmHelpers.resolveEnvVar("URI", envSuffix, envVars);

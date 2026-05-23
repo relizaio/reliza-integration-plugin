@@ -45,6 +45,8 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 	private Boolean jenkinsVersionMeta = false;
 	private String customVersionMeta;
 	private String customVersionModifier;
+	private String commitHash;
+	private Boolean rebuild = false;
 	private Boolean onlyVersion = false;
 	// Default lifecycle for the release created at version-mint time. PENDING
 	// is the canonical "build started" state — same convention `rearm-actions`
@@ -86,6 +88,12 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 	@DataBoundSetter public void setLifecycle(String lifecycle) {
 		this.lifecycle = lifecycle;
 	}
+	@DataBoundSetter public void setCommitHash(String commitHash) {
+		this.commitHash = commitHash;
+	}
+	@DataBoundSetter public void setRebuild(String value) {
+		this.rebuild = "true".equalsIgnoreCase(value);
+	}
 	@DataBoundSetter public void setGetVersion(String value) {
 		this.getVersion = !"false".equalsIgnoreCase(value);
 	}
@@ -102,16 +110,21 @@ public class RearmBuildWrapper extends SimpleBuildWrapper {
 
 		context.env("BUILD_START_TIME" + envSuffix, Instant.now().toString());
 
+		String resolvedCommit = commitHash != null
+				? commitHash
+				: RearmHelpers.resolveEnvVar("GIT_COMMIT", envSuffix, initialEnvironment);
+
 		RearmFlagsBuilder flagsBuilder = RearmFlags.builder()
 				.apiKeyId(initialEnvironment.get("REARM_API_USR"))
 				.apiKey(initialEnvironment.get("REARM_API_PSW"))
 				.componentId(RearmHelpers.toUUID(componentId, listener))
 				.branch(RearmHelpers.resolveEnvVar("GIT_BRANCH", envSuffix, initialEnvironment))
-				.commitHash(RearmHelpers.resolveEnvVar("GIT_COMMIT", envSuffix, initialEnvironment))
+				.commitHash(resolvedCommit)
 				.commitMessage(RearmHelpers.resolveEnvVar("COMMIT_MESSAGE", envSuffix, initialEnvironment))
 				.commitList(RearmHelpers.resolveEnvVar("COMMIT_LIST", envSuffix, initialEnvironment))
 				.modifier(customVersionModifier)
 				.lifecycle(lifecycle)
+				.rebuild(rebuild)
 				.onlyVersion(onlyVersion);
 
 		if (uri != null) flagsBuilder.baseUrl(uri);

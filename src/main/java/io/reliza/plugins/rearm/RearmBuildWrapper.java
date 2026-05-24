@@ -16,11 +16,11 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.tasks.BuildWrapperDescriptor;
 import jenkins.tasks.SimpleBuildWrapper;
-import rearm.java.client.RearmFlags;
-import rearm.java.client.RearmFlags.RearmFlagsBuilder;
-import rearm.java.client.RearmLibrary;
-import rearm.java.client.responses.RearmRelease;
-import rearm.java.client.responses.RearmVersion;
+import com.rearmhq.javaclient.RearmFlags;
+import com.rearmhq.javaclient.RearmFlags.RearmFlagsBuilder;
+import com.rearmhq.javaclient.RearmLibrary;
+import com.rearmhq.javaclient.responses.RearmRelease;
+import com.rearmhq.javaclient.responses.RearmVersion;
 
 /**
  * Pipeline wrapper that negotiates a new release version with ReARM and

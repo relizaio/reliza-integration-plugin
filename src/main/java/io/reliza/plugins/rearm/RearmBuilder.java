@@ -22,10 +22,10 @@ import hudson.model.TaskListener;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import jenkins.tasks.SimpleBuildStep;
-import rearm.java.client.RearmFlags;
-import rearm.java.client.RearmFlags.RearmFlagsBuilder;
-import rearm.java.client.RearmLibrary;
-import rearm.java.client.responses.RearmRelease;
+import com.rearmhq.javaclient.RearmFlags;
+import com.rearmhq.javaclient.RearmFlags.RearmFlagsBuilder;
+import com.rearmhq.javaclient.RearmLibrary;
+import com.rearmhq.javaclient.responses.RearmRelease;
 
 /**
  * Pipeline step that records a release on ReARM. Pulls component / VCS context

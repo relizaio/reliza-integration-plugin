@@ -19,7 +19,7 @@
         `addReleaseProgrammatic`, so the row stays the same — operators
         see the release in ReARM immediately at build start and don't
         get a duplicate at finish.
--   Bump Reliza Java Client dependency to 0.5.0 (adds the `rearm.java.client`
+-   Bump Reliza Java Client dependency to 0.5.0 (adds the `com.rearmhq.javaclient`
     sibling package; Reliza Hub paths unchanged).
 -   `withReliza` / `addRelizaRelease` are unchanged.
 
